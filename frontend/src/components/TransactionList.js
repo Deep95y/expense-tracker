@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import EditTransactionModal from './EditTransactionModal';
 import '../App.css';
 
 const TransactionList = ({ transactions, loading, onUpdate }) => {
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -25,6 +28,25 @@ const TransactionList = ({ transactions, loading, onUpdate }) => {
     setSelectedCategory(transaction.category_id || '');
   };
 
+  const handleFullEdit = (transaction) => {
+    setEditingTransaction(transaction);
+    setIsEditModalOpen(true);
+  };
+
+  const handleDuplicate = async (transaction) => {
+    if (!window.confirm('Duplicate this transaction?')) {
+      return;
+    }
+
+    try {
+      await axios.post(`/api/transactions/${transaction.id}/duplicate`);
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error('Error duplicating transaction:', error);
+      alert('Failed to duplicate transaction');
+    }
+  };
+
   const handleSave = async (transactionId) => {
     try {
       await axios.put(`/api/transactions/${transactionId}/category`, {
@@ -36,6 +58,15 @@ const TransactionList = ({ transactions, loading, onUpdate }) => {
       console.error('Error updating category:', error);
       alert('Failed to update category');
     }
+  };
+
+  const handleEditModalClose = () => {
+    setIsEditModalOpen(false);
+    setEditingTransaction(null);
+  };
+
+  const handleEditModalSave = () => {
+    if (onUpdate) onUpdate();
   };
 
   const handleDelete = async (transactionId) => {
@@ -79,6 +110,7 @@ const TransactionList = ({ transactions, loading, onUpdate }) => {
                 <th style={{ padding: '12px' }}>Amount</th>
                 <th style={{ padding: '12px' }}>Type</th>
                 <th style={{ padding: '12px' }}>Category</th>
+                <th style={{ padding: '12px' }}>Notes</th>
                 <th style={{ padding: '12px' }}>Actions</th>
               </tr>
             </thead>
@@ -86,8 +118,8 @@ const TransactionList = ({ transactions, loading, onUpdate }) => {
               {transactions.map((txn) => (
                 <tr key={txn.id} style={{ borderBottom: '1px solid #eee' }}>
                   <td style={{ padding: '12px' }}>{txn.date}</td>
-                  <td style={{ padding: '12px', maxWidth: '300px' }}>
-                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '12px', maxWidth: '250px' }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={txn.description}>
                       {txn.description}
                     </div>
                   </td>
@@ -120,6 +152,21 @@ const TransactionList = ({ transactions, loading, onUpdate }) => {
                       <span>{txn.category_name || 'Uncategorized'}</span>
                     )}
                   </td>
+                  <td style={{ padding: '12px', maxWidth: '200px' }}>
+                    {txn.notes ? (
+                      <div style={{ 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis', 
+                        whiteSpace: 'nowrap',
+                        fontSize: '12px',
+                        color: '#666'
+                      }} title={txn.notes}>
+                        {txn.notes}
+                      </div>
+                    ) : (
+                      <span style={{ color: '#999', fontSize: '12px' }}>—</span>
+                    )}
+                  </td>
                   <td style={{ padding: '12px' }}>
                     {editingId === txn.id ? (
                       <div style={{ display: 'flex', gap: '5px' }}>
@@ -139,18 +186,28 @@ const TransactionList = ({ transactions, loading, onUpdate }) => {
                         </button>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', gap: '5px' }}>
+                      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn btn-primary"
+                          style={{ padding: '5px 10px', fontSize: '12px' }}
+                          onClick={() => handleFullEdit(txn)}
+                          title="Edit full transaction"
+                        >
+                          Edit
+                        </button>
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '5px 10px', fontSize: '12px' }}
-                          onClick={() => handleEdit(txn)}
+                          onClick={() => handleDuplicate(txn)}
+                          title="Duplicate this transaction"
                         >
-                          Edit
+                          Duplicate
                         </button>
                         <button
                           className="btn btn-danger"
                           style={{ padding: '5px 10px', fontSize: '12px' }}
                           onClick={() => handleDelete(txn.id)}
+                          title="Delete transaction"
                         >
                           Delete
                         </button>
@@ -163,6 +220,14 @@ const TransactionList = ({ transactions, loading, onUpdate }) => {
           </table>
         </div>
       )}
+
+      <EditTransactionModal
+        transaction={editingTransaction}
+        categories={categories}
+        isOpen={isEditModalOpen}
+        onClose={handleEditModalClose}
+        onSave={handleEditModalSave}
+      />
     </div>
   );
 };

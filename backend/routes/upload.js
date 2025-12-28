@@ -47,10 +47,20 @@ router.post('/', authenticateToken, upload.single('file'), async (req, res, next
             // Expected columns: date, description, amount (or similar variations)
             const dateStr = row.date || row.Date || row.DATE || row.transaction_date || row['Transaction Date'];
             const desc = row.description || row.Description || row.DESCRIPTION || row.narration || row.Narration || row.remarks || '';
-            const amountStr = row.amount || row.Amount || row.AMOUNT || row.debit || row.Debit || row.credit || row.Credit || row.balance || row.Balance;
+            const amountStr = row.amount || row.Amount || row.AMOUNT || row.balance || row.Balance || '';
             
-            if (!dateStr || !amountStr) {
-              errors.push(`Row skipped: Missing date or amount - ${JSON.stringify(row)}`);
+            // Check for detailed format with separate debit/credit columns
+            const debitAmountStr = row['Debit Amount'] || row['debit amount'] || row['Debit'] || row['debit'] || '';
+            const creditAmountStr = row['Credit Amount'] || row['credit amount'] || row['Credit'] || row['credit'] || '';
+            
+            if (!dateStr) {
+              errors.push(`Row skipped: Missing date - ${JSON.stringify(row)}`);
+              return;
+            }
+            
+            // Must have either amount column OR debit/credit columns
+            if (!amountStr && !debitAmountStr && !creditAmountStr) {
+              errors.push(`Row skipped: Missing amount information - ${JSON.stringify(row)}`);
               return;
             }
 
@@ -61,21 +71,42 @@ router.post('/', authenticateToken, upload.single('file'), async (req, res, next
             }
 
             // Determine transaction type and amount
-            let amount = parseFloat(amountStr.replace(/[^\d.-]/g, ''));
-            let transactionType = 'debit';
+            let amount = 0;
+            let transactionType = 'debit'; // Default to debit for expenses
             
-            // If amount is negative, it's a debit; positive might be credit
-            if (amount > 0 && (row.credit || row.Credit)) {
+            // Check for separate Debit Amount and Credit Amount columns (detailed format)
+            const debitAmount = debitAmountStr ? parseFloat(debitAmountStr.replace(/[^\d.-]/g, '')) : 0;
+            const creditAmount = creditAmountStr ? parseFloat(creditAmountStr.replace(/[^\d.-]/g, '')) : 0;
+            
+            if (!isNaN(debitAmount) && debitAmount > 0) {
+              // Has valid debit amount
+              amount = debitAmount;
+              transactionType = 'debit';
+            } else if (!isNaN(creditAmount) && creditAmount > 0) {
+              // Has valid credit amount
+              amount = creditAmount;
               transactionType = 'credit';
-            } else if (amount < 0) {
-              amount = Math.abs(amount);
-              transactionType = 'debit';
-            } else if (amount > 0 && (row.debit || row.Debit)) {
-              transactionType = 'debit';
+            } else if (amountStr && amountStr.trim() !== '') {
+              // Simple format - use amount column
+              amount = parseFloat(amountStr.replace(/[^\d.-]/g, ''));
+              
+              // If amount is negative, it's a debit; positive might be credit
+              if (amount < 0) {
+                amount = Math.abs(amount);
+                transactionType = 'debit';
+              } else if (amount > 0) {
+                // Check if there's explicit credit indicator
+                if (row.credit || row.Credit || row.type === 'credit' || row.Type === 'Credit') {
+                  transactionType = 'credit';
+                } else {
+                  // Default to debit for expense tracking (most transactions are expenses)
+                  transactionType = 'debit';
+                }
+              }
             }
 
             if (isNaN(amount) || amount === 0) {
-              errors.push(`Row skipped: Invalid amount - ${amountStr}`);
+              errors.push(`Row skipped: Invalid amount - ${JSON.stringify(row)}`);
               return;
             }
 
@@ -86,7 +117,7 @@ router.post('/', authenticateToken, upload.single('file'), async (req, res, next
               date: date.toISOString().split('T')[0],
               description: desc.trim() || 'Unknown',
               amount,
-              transactionType,
+              transaction_type: transactionType, // Use snake_case to match database column
               categoryName
             });
           } catch (error) {

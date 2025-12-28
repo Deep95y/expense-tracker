@@ -17,6 +17,7 @@ router.get('/export/csv', authenticateToken, async (req, res, next) => {
         t.description,
         t.amount,
         t.transaction_type,
+        t.notes,
         c.name as category_name
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id
@@ -47,14 +48,15 @@ router.get('/export/csv', authenticateToken, async (req, res, next) => {
     const result = await pool.query(query, params);
 
     // Generate CSV
-    const csvHeader = 'Date,Description,Amount,Type,Category\n';
+    const csvHeader = 'Date,Description,Amount,Type,Category,Notes\n';
     const csvRows = result.rows.map(row => {
       return [
         row.date,
         `"${row.description.replace(/"/g, '""')}"`,
         row.amount,
         row.transaction_type,
-        row.category_name || 'Uncategorized'
+        row.category_name || 'Uncategorized',
+        `"${(row.notes || '').replace(/"/g, '""')}"`
       ].join(',');
     }).join('\n');
 
@@ -80,6 +82,7 @@ router.get('/export/pdf', authenticateToken, async (req, res, next) => {
         t.description,
         t.amount,
         t.transaction_type,
+        t.notes,
         c.name as category_name
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id
@@ -165,8 +168,9 @@ router.get('/export/pdf', authenticateToken, async (req, res, next) => {
       if (index > 0 && index % 20 === 0) {
         doc.addPage();
       }
+      const notesText = row.notes ? ` | Notes: ${row.notes.substring(0, 30)}` : '';
       doc.fontSize(9).text(
-        `${row.date} | ${row.description.substring(0, 40)} | ₹${row.amount} | ${row.category_name || 'Uncategorized'}`,
+        `${row.date} | ${row.description.substring(0, 40)} | ₹${row.amount} | ${row.category_name || 'Uncategorized'}${notesText}`,
         { width: 500 }
       );
     });
