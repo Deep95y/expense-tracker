@@ -268,6 +268,19 @@ Update `docker-compose.yml` or create `.env` files with production values:
 
 ## License
 
+###env
+
+PORT=5000
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=expense_tracker
+DB_USER=postgres
+DB_PASSWORD=Admin1234
+JWT_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTc2NjI5OTI0MiwiZXhwIjoxNzY2MzAyODQyfQ.KC-ZUXsKtcR4pNj9b9f7msqLRHCp5lkCH1vymdLJSs0
+NODE_ENV=development
+
+
+
 ISC
 
 ## Author
